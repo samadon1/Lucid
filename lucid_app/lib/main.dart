@@ -109,149 +109,152 @@ class _InitializationScreenState extends State<InitializationScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
               Colors.white,
-              Color(0xFFF3F4F6), // Light gray
+              Color(0xFFF3F4F6),
             ],
           ),
         ),
         child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Spacer(),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Spacer(flex: 2),
 
-              // Logo / Title
-              Column(
-                children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.primaryIndigo.withOpacity(0.1),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryIndigo.withOpacity(0.2),
-                            blurRadius: 40,
-                            spreadRadius: 10,
-                          ),
-                        ],
+                // Logo Icon
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primaryIndigo.withOpacity(0.1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryIndigo.withOpacity(0.2),
+                        blurRadius: 40,
+                        spreadRadius: 10,
                       ),
-                      child: const Icon(
-                        Icons.visibility_outlined, 
-                        size: 64, 
-                        color: AppColors.primaryIndigo
-                      ),
-                    ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack),
-                    
-                    const SizedBox(height: 32),
-                    
-                    Text(
-                      'Lucid',
-                      style: AppTypography.displayLarge.copyWith(
-                        fontSize: 48,
-                        letterSpacing: 4,
-                      ),
-                    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
-                    
-                    const SizedBox(height: 12),
-                    
-                    Text(
-                      'AI VISION ASSISTANT',
-                      style: AppTypography.labelMedium.copyWith(
-                        letterSpacing: 3,
-                        color: AppColors.textSecondary,
-                      ),
-                    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
-                  ],
-                ),
-                
-                const Spacer(),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.visibility_outlined,
+                    size: 64,
+                    color: AppColors.primaryIndigo,
+                  ),
+                ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack),
+
+                const SizedBox(height: 32),
+
+                // Title
+                Text(
+                  'Lucid',
+                  style: AppTypography.displayLarge.copyWith(
+                    fontSize: 48,
+                    letterSpacing: 4,
+                  ),
+                  textAlign: TextAlign.center,
+                ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
+
+                const SizedBox(height: 12),
+
+                // Subtitle
+                Text(
+                  'AI VISION ASSISTANT',
+                  style: AppTypography.labelMedium.copyWith(
+                    letterSpacing: 3,
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
+
+                const Spacer(flex: 2),
 
                 // Progress Card
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(24),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                       child: Container(
+                        width: double.infinity,
                         padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: AppColors.glassFill,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: AppColors.glassStroke,
-                          width: 1,
+                        decoration: BoxDecoration(
+                          color: AppColors.glassFill,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: AppColors.glassStroke,
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!_hasError) ...[
+                              SizedBox(
+                                width: 64,
+                                height: 64,
+                                child: CircularProgressIndicator(
+                                  value: _progress,
+                                  color: AppColors.primaryIndigo,
+                                  strokeWidth: 4,
+                                  backgroundColor: AppColors.textTertiary.withOpacity(0.2),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                            Text(
+                              _status,
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: _hasError ? AppColors.error : AppColors.textPrimary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            if (_hasError) ...[
+                              const SizedBox(height: 24),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _hasError = false;
+                                    _status = 'Initializing...';
+                                    _progress = null;
+                                  });
+                                  _initializeModels();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primaryIndigo,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      child: Column(
-                        children: [
-                          if (!_hasError) ...[
-                            SizedBox(
-                              width: 64,
-                              height: 64,
-                              child: CircularProgressIndicator(
-                                value: _progress,
-                                color: AppColors.primaryIndigo,
-                                strokeWidth: 4,
-                                backgroundColor: AppColors.textTertiary.withOpacity(0.2),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-
-                          Text(
-                            _status,
-                            style: AppTypography.bodyMedium.copyWith(
-                              color: _hasError ? AppColors.error : AppColors.textPrimary,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-
-                          if (_hasError) ...[
-                            const SizedBox(height: 24),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  _hasError = false;
-                                  _status = 'Initializing...';
-                                  _progress = null;
-                                });
-                                _initializeModels();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryIndigo,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 32,
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ],
-                      ),
                     ),
-                  ),
-                ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
+                  ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
                 // Info text
                 if (!_hasError)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Text(
                       'First launch may take a few minutes\nto download AI models (~2GB)',
                       style: AppTypography.caption.copyWith(
@@ -261,9 +264,10 @@ class _InitializationScreenState extends State<InitializationScreen> {
                     ).animate().fadeIn(delay: 800.ms),
                   ),
 
-                const SizedBox(height: 20),
+                const Spacer(flex: 2),
               ],
             ),
+          ),
         ),
       ),
     );

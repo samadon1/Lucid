@@ -163,25 +163,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('All data cleared. Restarting app...'),
+            content: const Text('All data cleared. App will close - reopen to continue.'),
             backgroundColor: AppColors.secondary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
+            duration: const Duration(milliseconds: 1300),
           ),
         );
 
-        // Restart app to clear AR markers
+        // Force complete app exit to clear all memory including AR markers
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (mounted) {
-            // Navigate back to root and replace with InitializationScreen
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) => const InitializationScreen(),
-              ),
-              (route) => false,
-            );
+            // Exit the app completely - user will need to manually reopen
+            SystemNavigator.pop();
           }
         });
       }
