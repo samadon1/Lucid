@@ -33,6 +33,7 @@ class _ARSpatialScreenState extends State<ARSpatialScreen> {
   String _aiResponse = '';
   List<String> _relatedNotes = [];
   bool _showMoreContext = false;
+  String _currentSearchTerm = '';
 
   @override
   void initState() {
@@ -442,6 +443,9 @@ class _ARSpatialScreenState extends State<ARSpatialScreen> {
   }
 
   Future<void> _findLocation(String searchTerm) async {
+    // Store for "More Context"
+    _currentSearchTerm = searchTerm;
+
     // Search using RAG
     final memory = await _spatialService.findMemory(searchTerm);
 
@@ -482,10 +486,40 @@ class _ARSpatialScreenState extends State<ARSpatialScreen> {
       await _voiceService.speak(response);
     }
 
-    // Clear response after 5 seconds
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) setState(() => _aiResponse = '');
-    });
+    // Response stays visible until user manually dismisses it
+  }
+
+  Future<void> _fetchRelatedContext() async {
+    if (_currentSearchTerm.isEmpty) return;
+
+    try {
+      // Use the RAG to search for notes related to the search term
+      final modelManager = ModelManager();
+      await modelManager.initialize();
+
+      final results = await modelManager.rag.search(
+        text: _currentSearchTerm,
+        limit: 5, // Get top 5 related notes
+      );
+
+      // Extract note content from results
+      final notes = results.map((result) {
+        return result.chunk.content;
+      }).toList();
+
+      setState(() {
+        _relatedNotes = notes;
+        _showMoreContext = true;
+      });
+
+      print('Found ${notes.length} related notes for: $_currentSearchTerm');
+    } catch (e) {
+      print('Error fetching context: $e');
+      setState(() {
+        _relatedNotes = ['Unable to load context'];
+        _showMoreContext = true;
+      });
+    }
   }
 
   String _formatTimeAgo(Duration difference) {
@@ -778,6 +812,30 @@ class _ARSpatialScreenState extends State<ARSpatialScreen> {
                 borderRadius: BorderRadius.circular(28),
                 child: Column(
                   children: [
+                    // Close button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            setState(() => _aiResponse = '');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     Icon(
                       Icons.location_on,
                       color: Colors.white.withOpacity(0.9),
@@ -795,10 +853,51 @@ class _ARSpatialScreenState extends State<ARSpatialScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    if (_aiResponse.isNotEmpty && _currentSearchTerm.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: GestureDetector(
+                          onTap: _fetchRelatedContext,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF0A84FF), Color(0xFF0066CC)],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF0A84FF).withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'More Context',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
+
+          // Context Panel - Related notes
+          _buildContextPanel(),
 
           // Bottom Input Bar - Ultra premium
           Positioned(
@@ -884,6 +983,119 @@ class _ARSpatialScreenState extends State<ARSpatialScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildContextPanel() {
+    if (!_showMoreContext || _relatedNotes.isEmpty) return const SizedBox.shrink();
+
+    return Positioned(
+      bottom: 120,
+      left: 20,
+      right: 20,
+      child: GestureDetector(
+        onTap: () {}, // Prevent taps from passing through
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 400),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.3),
+                    Colors.white.withOpacity(0.2),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.4),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Related Context',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() => _showMoreContext = false);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Notes list
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _relatedNotes.map((note) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              note,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
