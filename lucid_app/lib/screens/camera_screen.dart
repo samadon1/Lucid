@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -324,7 +324,7 @@ class _CameraScreenState extends State<CameraScreen>
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12), // Reduced blur for more transparency
+        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12), // Reduced blur for more transparency
         child: Container(
           width: width,
           height: height,
@@ -615,7 +615,7 @@ class _CameraScreenState extends State<CameraScreen>
                 children: [
                   const SizedBox(width: 40),
                   Text(
-                    'Voice Mode',
+                    'Integrations',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
@@ -623,10 +623,18 @@ class _CameraScreenState extends State<CameraScreen>
                       letterSpacing: -0.4,
                     ),
                   ),
-                  Icon(
-                    Icons.settings_outlined,
-                    size: 24,
-                    color: Colors.black.withOpacity(0.6),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      );
+                    },
+                    child: Icon(
+                      Icons.settings_outlined,
+                      size: 24,
+                      color: Colors.black.withOpacity(0.6),
+                    ),
                   ),
                 ],
               ),
@@ -634,14 +642,20 @@ class _CameraScreenState extends State<CameraScreen>
 
             const Spacer(),
 
-            // AirPods icon
-            GestureDetector(
-              onTap: _handleVoiceTap,
-              child: Image.asset(
-                'assets/images/airpods_icon.jpg',
-                width: 280,
-                height: 280,
-                fit: BoxFit.contain,
+            // Gmail icon
+            Container(
+              width: 280,
+              height: 280,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Image.asset(
+                  'assets/images/gmail.png',
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
 
@@ -737,37 +751,39 @@ class _CameraScreenState extends State<CameraScreen>
                 ),
               ),
 
-            // Tap to speak button
+            // Notes button (circular, AR mic style)
             Padding(
               padding: const EdgeInsets.only(bottom: 60),
               child: GestureDetector(
-                onTap: _handleVoiceTap,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const NotesScreen()),
+                  );
+                },
                 child: Container(
+                  width: 72,
+                  height: 72,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFCC00),
-                    borderRadius: BorderRadius.circular(24),
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(
+                      color: Colors.black.withOpacity(0.1),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _isListening ? Icons.stop_rounded : Icons.mic_none_rounded,
-                          size: 20,
-                          color: Colors.black.withOpacity(0.85),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _isListening ? 'Stop' : 'Tap to speak',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black.withOpacity(0.85),
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
+                  child: Center(
+                    child: Icon(
+                      Icons.sticky_note_2_outlined,
+                      size: 32,
+                      color: Colors.black.withOpacity(0.8),
                     ),
                   ),
                 ),
@@ -802,10 +818,18 @@ class _CameraScreenState extends State<CameraScreen>
                       letterSpacing: -0.4,
                     ),
                   ),
-                  Icon(
-                    Icons.settings_outlined,
-                    size: 24,
-                    color: Colors.black.withOpacity(0.6),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      );
+                    },
+                    child: Icon(
+                      Icons.settings_outlined,
+                      size: 24,
+                      color: Colors.black.withOpacity(0.6),
+                    ),
                   ),
                 ],
               ),
@@ -874,55 +898,12 @@ class _CameraScreenState extends State<CameraScreen>
 
             const Spacer(),
 
-            // Activate button
-            Padding(
-              padding: const EdgeInsets.only(bottom: 60),
-              child: GestureDetector(
-                onTap: _handleVoiceTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFCC00),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFFCC00).withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.graphic_eq_rounded,
-                        size: 20,
-                        color: Colors.black.withOpacity(0.85),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        _isListening ? 'Stop' : 'Activate',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black.withOpacity(0.85),
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Memory match indicator
+            // Memory match indicator (ABOVE button)
             if (_matchedMemory != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: 30),
+                padding: const EdgeInsets.only(bottom: 16),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
                     color: const Color(0xFFf5f5f7),
                     borderRadius: BorderRadius.circular(14),
@@ -945,6 +926,40 @@ class _CameraScreenState extends State<CameraScreen>
                   ),
                 ),
               ),
+
+            // Coming Soon button (circular bluetooth style)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 60),
+              child: GestureDetector(
+                onTap: _showComingSoonModal,
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(
+                      color: Colors.black.withOpacity(0.1),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.bluetooth,
+                      size: 32,
+                      color: Colors.black.withOpacity(0.8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1016,7 +1031,7 @@ class _CameraScreenState extends State<CameraScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
@@ -1058,7 +1073,7 @@ class _CameraScreenState extends State<CameraScreen>
             ClipRRect(
               borderRadius: BorderRadius.circular(200),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                 child: Container(
                   width: 340,
                   height: 340,
@@ -1125,7 +1140,7 @@ class _CameraScreenState extends State<CameraScreen>
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   decoration: BoxDecoration(
@@ -1208,7 +1223,7 @@ class _CameraScreenState extends State<CameraScreen>
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(30),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       decoration: BoxDecoration(
@@ -1259,6 +1274,104 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Show Coming Soon modal
+  void _showComingSoonModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.science_outlined,
+                    size: 64,
+                    color: Colors.black.withOpacity(0.7),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Coming Soon',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black.withOpacity(0.9),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Smart glasses integration is currently in development. Stay tuned!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.black.withOpacity(0.6),
+                      height: 1.4,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.black.withOpacity(0.1),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'Got it',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black.withOpacity(0.85),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
