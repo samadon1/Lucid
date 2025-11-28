@@ -122,13 +122,13 @@ class _InitializationScreenState extends State<InitializationScreen> {
         child: SafeArea(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 32),
-                const Spacer(),
-                
-                // Logo / Title
-                Column(
-                  children: [
+              const Spacer(),
+
+              // Logo / Title
+              Column(
+                children: [
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
