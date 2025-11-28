@@ -73,9 +73,7 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _initDemo() async {
     await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      await _voiceService.speak('Welcome to Lucid. Swipe to explore modes.');
-    }
+    // Silent initialization - no voice prompt
   }
 
   @override
@@ -710,13 +708,17 @@ class _CameraScreenState extends State<CameraScreen>
                 ),
               )
             else
-              Text(
-                'Ready',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.black.withOpacity(0.6),
-                  letterSpacing: -0.2,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Connect your apps and services to enhance your spatial memories',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.black.withOpacity(0.6),
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
 
@@ -886,13 +888,17 @@ class _CameraScreenState extends State<CameraScreen>
                 ],
               )
             else
-              Text(
-                'Ready',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.black.withOpacity(0.6),
-                  letterSpacing: -0.2,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Pair your smart glasses for hands-free AR experiences',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.black.withOpacity(0.6),
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
 
