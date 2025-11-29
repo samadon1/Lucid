@@ -27,10 +27,29 @@ class ModelManager {
       _stt != null &&
       _rag != null;
 
+  bool _isInitializing = false;
+
   /// Initialize all models (download + load)
   Future<void> initialize({
     Function(String step, double? progress)? onProgress,
   }) async {
+    // Prevent multiple initializations
+    if (isInitialized) {
+      print('ModelManager: Already initialized, skipping');
+      return;
+    }
+
+    if (_isInitializing) {
+      print('ModelManager: Already initializing, waiting...');
+      // Wait for existing initialization to complete
+      while (_isInitializing) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return;
+    }
+
+    _isInitializing = true;
+
     try {
       // Initialize vision model - try to find a vision-capable model
       onProgress?.call('Fetching available models...', null);
@@ -92,9 +111,43 @@ class ModelManager {
       print('Vision model initialized: ${visionModel.slug}');
       onProgress?.call('Vision AI ready', 1.0);
 
-      // Use same model for memory and conversation
-      _memoryLM = _visionLM;
-      _conversationLM = _visionLM;
+      // Initialize memory model for embeddings (keep qwen3-0.6)
+      onProgress?.call('Initializing embedding model...', null);
+      _memoryLM = CactusLM();
+      
+      await _memoryLM!.downloadModel(
+        model: 'qwen3-0.6',
+        downloadProcessCallback: (progress, status, isError) {
+          if (!isError) {
+            onProgress?.call(status, progress);
+          }
+        },
+      );
+      
+      await _memoryLM!.initializeModel(
+        params: CactusInitParams(model: 'qwen3-0.6'),
+      );
+      print('Embedding model initialized: qwen3-0.6');
+      
+      // Initialize a separate fast text model for generation (lfm2-350m)
+      onProgress?.call('Initializing text model...', null);
+      _conversationLM = CactusLM();
+      
+      // Use lfm2-350m (229MB) - smallest and fastest Liquid model for text generation
+      await _conversationLM!.downloadModel(
+        model: 'lfm2-350m',
+        downloadProcessCallback: (progress, status, isError) {
+          if (!isError) {
+            onProgress?.call(status, progress);
+          }
+        },
+      );
+      
+      await _conversationLM!.initializeModel(
+        params: CactusInitParams(model: 'lfm2-350m'),
+      );
+      print('Text model initialized: lfm2-350m');
+      
       onProgress?.call('Models configured', 1.0);
 
       // Speech-to-text
@@ -129,7 +182,10 @@ class ModelManager {
       onProgress?.call('All models initialized!', 1.0);
     } catch (e) {
       print('Error initializing models: $e');
+      _isInitializing = false;
       rethrow;
+    } finally {
+      _isInitializing = false;
     }
   }
 
