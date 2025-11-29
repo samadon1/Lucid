@@ -6,14 +6,14 @@
 
 [![Lucid Demo](https://img.youtube.com/vi/RTKM20KjtDA/maxresdefault.jpg)](https://youtube.com/shorts/RTKM20KjtDA)
 
+*Click the thumbnail to watch the demo on YouTube Shorts*
 
 Lucid is an AR-powered intelligence layer that connects your digital world (email, calendar, calls, notes, tasks) with the physical world around you. Using augmented reality, voice commands, and local AI, Lucid helps you understand, interact with, and get contextual information about your environment in real-time.
 
-## 🎥 Demo Video
+# You can download the IPA file from 
+[Download here](https://raw.githubusercontent.com/samadon1/Lucid/main/lucid_app.ipa.zip)
 
-[![Lucid Demo](https://img.youtube.com/vi/RTKM20KjtDA/maxresdefault.jpg)](https://youtube.com/shorts/RTKM20KjtDA)
 
-*Click the thumbnail to watch the demo on YouTube Shorts*
 
 ## 🌟 Vision
 
