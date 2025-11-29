@@ -4,6 +4,12 @@
 
 Lucid is an AR-powered intelligence layer that connects your digital world (email, calendar, calls, notes, tasks) with the physical world around you. Using augmented reality, voice commands, and local AI, Lucid helps you understand, interact with, and get contextual information about your environment in real-time.
 
+## 🎥 Demo Video
+
+[![Lucid Demo](https://img.youtube.com/vi/RTKM20KjtDA/maxresdefault.jpg)](https://youtube.com/shorts/RTKM20KjtDA)
+
+*Click the thumbnail to watch the demo on YouTube Shorts*
+
 ## 🌟 Vision
 
 Lucid serves as an intelligent bridge between two worlds:
@@ -75,5 +81,5 @@ This is a hackathon project demonstrating the core concept. Future development w
 
 ---
 
-**Built for Mobile AI Hackathon: Cactus X Nothing X Hugging Face**
+**Built for the Mobile AI Hackathon: Cactus X Nothing X Hugging Face**
 
