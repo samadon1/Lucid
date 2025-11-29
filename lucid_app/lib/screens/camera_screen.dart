@@ -228,12 +228,11 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Future<void> _executeVoiceCommand(VoiceCommand command, String originalText) async {
-    // Capture frame when user speaks (on-demand)
-    print('📸 Capturing frame for voice command...');
-    final imagePath = await _captureImage();
-
     switch (command.type) {
       case CommandType.save:
+        // Capture frame for saving memory
+        print('📸 Capturing frame for save command...');
+        final imagePath = await _captureImage();
         if (command.extractedLabel != null && command.extractedLabel!.isNotEmpty) {
           await _handleSaveMemory(imagePath, command.extractedLabel!);
         } else {
@@ -242,7 +241,7 @@ class _CameraScreenState extends State<CameraScreen>
         break;
 
       case CommandType.find:
-        // Handle "where is..." queries
+        // Handle "where is..." queries (no image needed)
         if (command.extractedLabel != null && command.extractedLabel!.isNotEmpty) {
           await _handleFindMemory(command.extractedLabel!);
         } else {
@@ -251,21 +250,25 @@ class _CameraScreenState extends State<CameraScreen>
         break;
 
       case CommandType.recall:
+        // Capture frame for recall
+        print('📸 Capturing frame for recall command...');
+        final imagePath = await _captureImage();
         await _handleRecallMemory(imagePath);
         break;
 
       case CommandType.analyze:
-        final description = await _visionService.analyzeImage(imagePath);
+        // VLM disabled - return placeholder message (no image capture needed)
+        const description = 'Vision analysis is currently disabled';
         setState(() => _statusText = description);
-        await _voiceService.speak("I see $description");
+        await _voiceService.speak("Vision analysis is currently disabled");
         break;
 
       case CommandType.question:
-        final visionDescription = await _visionService.analyzeImage(imagePath);
+        // VLM disabled - respond without vision context (no image capture needed)
         final response = await _conversationService.respond(
           originalText,
           memoryContext: _matchedMemory,
-          currentVisionDescription: visionDescription,
+          currentVisionDescription: null, // No vision description
         );
         await _voiceService.speak(response);
         setState(() => _statusText = response);
