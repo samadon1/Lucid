@@ -24,7 +24,8 @@ android {
         applicationId = "com.lucid.lucid_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // ARCore requires minimum SDK 24 (Android 7.0)
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -39,6 +40,12 @@ android {
     }
 }
 
+
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // ARCore Sceneform dependencies
+    implementation("com.google.ar.sceneform.ux:sceneform-ux:1.8.0")
 }

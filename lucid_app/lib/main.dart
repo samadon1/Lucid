@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'services/model_manager.dart';
 import 'screens/camera_screen.dart';
+import 'screens/ar_spatial_screen.dart';
 import 'theme/colors.dart';
 import 'theme/typography.dart';
 
@@ -11,17 +12,17 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Lock to portrait mode
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
-  
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
   // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppColors.background,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: AppColors.background,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   runApp(const LucidApp());
 }
@@ -82,14 +83,16 @@ class _InitializationScreenState extends State<InitializationScreen> {
         },
       );
 
-      // Navigate to camera screen with PageView carousel once initialized
+      // TEST: Navigate directly to AR (bypassing CameraScreen to avoid camera conflict)
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const CameraScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const ARSpatialScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
             transitionDuration: const Duration(milliseconds: 800),
           ),
         );
@@ -115,10 +118,7 @@ class _InitializationScreenState extends State<InitializationScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Color(0xFFF3F4F6),
-            ],
+            colors: [Colors.white, Color(0xFFF3F4F6)],
           ),
         ),
         child: SafeArea(
@@ -205,7 +205,8 @@ class _InitializationScreenState extends State<InitializationScreen> {
                                   value: _progress,
                                   color: AppColors.primaryIndigo,
                                   strokeWidth: 4,
-                                  backgroundColor: AppColors.textTertiary.withOpacity(0.2),
+                                  backgroundColor: AppColors.textTertiary
+                                      .withOpacity(0.2),
                                 ),
                               ),
                               const SizedBox(height: 24),
@@ -213,7 +214,9 @@ class _InitializationScreenState extends State<InitializationScreen> {
                             Text(
                               _status,
                               style: AppTypography.bodyMedium.copyWith(
-                                color: _hasError ? AppColors.error : AppColors.textPrimary,
+                                color: _hasError
+                                    ? AppColors.error
+                                    : AppColors.textPrimary,
                               ),
                               textAlign: TextAlign.center,
                             ),
