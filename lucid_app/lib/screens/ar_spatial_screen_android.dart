@@ -1,27 +1,25 @@
 import 'dart:ui' as ui;
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:vector_math/vector_math_64.dart' as vm;
 import 'package:ar_flutter_plugin_plus/ar_flutter_plugin_plus.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_session_manager.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_object_manager.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_anchor_manager.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_location_manager.dart';
 import 'package:ar_flutter_plugin_plus/datatypes/config_planedetection.dart';
+import 'package:ar_flutter_plugin_plus/datatypes/node_types.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_node.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_hittest_result.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_anchor.dart';
-import 'package:vector_math/vector_math_64.dart' as vm;
-import 'package:cactus/cactus.dart';
-import '../models/spatial_memory.dart';
 import '../services/spatial_memory_service.dart';
-import '../services/model_manager.dart';
 import '../services/voice_service.dart';
 import '../services/face_recognition_service.dart';
+import '../services/model_manager.dart';
+import '../models/spatial_memory.dart';
 import 'settings_screen.dart';
 
-/// AR Spatial Screen for Android using ar_flutter_plugin_plus (ARCore)
-/// Mirrors iOS functionality: tap to place markers, voice to find them
-/// Uses Cactus embeddings for semantic search & persistence
+/// Android AR spatial memory screen using ar_flutter_plugin_plus
+/// Loads 3D GLTF sphere + 2D text overlays for markers
 class ARSpatialScreenAndroid extends StatefulWidget {
   const ARSpatialScreenAndroid({super.key});
 
@@ -33,29 +31,53 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
   ARSessionManager? _arSessionManager;
   ARObjectManager? _arObjectManager;
   ARAnchorManager? _arAnchorManager;
-  ARLocationManager? _arLocationManager;
-  final Map<String, ARNode> _nodes = {};
-  final Map<String, ARAnchor> _anchors = {};
 
-  // Track markers for visualization
-  final List<Map<String, dynamic>> _visibleMarkers = [];
-
+  // Services (deferred)
   late SpatialMemoryService? _spatialService;
   late VoiceService? _voiceService;
   late FaceRecognitionService? _faceService;
   late ModelManager? _modelManager;
-  bool _isListening = false;
-  bool _isLoading = true;
-  bool _isProcessing = false;
 
-  final TextEditingController _queryController = TextEditingController();
+  // State
+  bool _isLoading = true;
+  bool _isListening = false;
+  bool _isProcessing = false;
   String _aiResponse = '';
-  String _contextSummary = '';
-  bool _isLoadingContext = false;
-  String _currentSearchTerm = '';
-  bool _isDetectingFaces = false;
-  bool _isSummarizingPerson = false;
-  final Map<String, Map<String, dynamic>> _recognizedFaces = {};
+  final TextEditingController _queryController = TextEditingController();
+
+  // Marker tracking for 2D text overlays
+  final Map<String, Map<String, dynamic>> _markers = {};
+
+  // Screen projection helper
+  void _startTextPositionUpdates() {
+    // Update text positions 30 times per second
+    Stream.periodic(const Duration(milliseconds: 33)).listen((_) {
+      if (mounted && _markers.isNotEmpty) {
+        setState(() {
+          // Trigger rebuild to update text positions
+        });
+      }
+    });
+  }
+
+  Offset? _projectPositionToScreen(vm.Vector3 position) {
+    if (!mounted) return null;
+
+    // Simplified approach: stack labels vertically
+    // More reliable than trying to project 3D without proper camera matrix
+    final index = _markers.values.toList().indexWhere(
+      (m) => (m['position'] as vm.Vector3) == position,
+    );
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Stack vertically with spacing
+    final baseY = screenHeight * 0.25;
+    final yOffset = baseY + (index * 70.0);
+
+    return Offset(screenWidth / 2, yOffset);
+  }
 
   // Coaching overlay timeout
   bool _showCoachingOverlay = true;
@@ -74,10 +96,10 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
   }
 
   Future<void> _initServices() async {
-    // Start AR immediately - defer AI models to avoid freezing!
+    // Start AR immediately
     setState(() => _isLoading = false);
 
-    // Initialize AI models in background AFTER AR is running
+    // Initialize AI models in background
     Future.delayed(const Duration(seconds: 3), () async {
       if (!mounted) return;
 
@@ -94,22 +116,20 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
       _spatialService = SpatialMemoryService(modelManager, modelManager.rag);
       _faceService = FaceRecognitionService(modelManager, modelManager.rag);
 
-      // Load existing memories after models are ready
-      await _loadExistingMemories();
+      // Load existing memories and DEBUG LOG them
+      final memories = await _spatialService!.getAllMemories();
+      print('📍 ===== STORED MEMORIES IN CACTUS ===== ');
+      print('📍 Total count: ${memories.length}');
+      for (var i = 0; i < memories.length; i++) {
+        final m = memories[i];
+        print(
+          '📍 [$i] ${m.label} at (${m.position.x.toStringAsFixed(2)}, ${m.position.y.toStringAsFixed(2)}, ${m.position.z.toStringAsFixed(2)})',
+        );
+      }
+      print('📍 ===================================== ');
 
       print('✅ Background AI initialization complete');
     });
-  }
-
-  List<SpatialMemory> _pendingMemories = [];
-
-  Future<void> _loadExistingMemories() async {
-    if (_spatialService == null) return;
-    final memories = await _spatialService!.getAllMemories();
-    _pendingMemories = memories;
-    print(
-      '📍 Found ${memories.length} spatial memories (will display when AR is ready)',
-    );
   }
 
   void _onARViewCreated(
@@ -121,14 +141,12 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
     _arSessionManager = arSessionManager;
     _arObjectManager = arObjectManager;
     _arAnchorManager = arAnchorManager;
-    _arLocationManager = arLocationManager;
 
     try {
-      // Initialize AR session with OPTIMIZED settings for performance
-      // Feature points and excessive plane rendering cause lag!
+      // Initialize AR session with plane visualization
       _arSessionManager!.onInitialize(
-        showFeaturePoints: false, // ❌ Disable - very expensive
-        showPlanes: false, // ❌ Disable visual planes - causes freezing
+        showFeaturePoints: false,
+        showPlanes: true, // Enable to see detected planes (blue overlay)
         showWorldOrigin: false,
         handleTaps: true,
         handlePans: false,
@@ -136,277 +154,121 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
       );
       _arObjectManager!.onInitialize();
 
-      // Handle taps - user taps to place markers
+      // Handle taps
       _arSessionManager!.onPlaneOrPointTap = (List<ARHitTestResult> hits) {
         if (hits.isNotEmpty && !_isListening) {
           _handleTap(hits.first);
         }
       };
 
-      // Load pending memories after a delay
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (!mounted) return;
-        for (final memory in _pendingMemories) {
-          _createARMarker(memory.label, memory.position);
-        }
-        if (_pendingMemories.isNotEmpty) {
-          print('✅ Displayed ${_pendingMemories.length} AR markers on Android');
-        }
-      });
+      // Update text positions every frame
+      _startTextPositionUpdates();
+
+      print('✅ AR session initialized');
     } catch (e) {
-      print('❌ Error initializing AR session: $e');
+      print('❌ Error initializing AR: $e');
     }
   }
 
   void _handleTap(ARHitTestResult hit) {
-    // Get 3D position from tap
-    final pos = hit.worldTransform.getTranslation();
-    // Show dialog to name it
-    _showNameDialog(pos);
+    final position = hit.worldTransform.getTranslation();
+    _showNameDialog(position);
   }
 
   void _showNameDialog(vm.Vector3 position) {
-    final controller = TextEditingController();
+    final nameController = TextEditingController();
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.3),
-      builder: (context) => BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withOpacity(0.25),
-                      Colors.white.withOpacity(0.15),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.4),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 40,
-                      spreadRadius: -5,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF0A84FF), Color(0xFF0066CC)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF0A84FF).withOpacity(0.3),
-                            blurRadius: 15,
-                            spreadRadius: 0,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.location_on,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Title
-                    const Text(
-                      'Name this spot',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Input field
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: TextField(
-                        controller: controller,
-                        autofocus: true,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'e.g., keys, laptop',
-                          hintStyle: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 17,
-                            fontWeight: FontWeight.w400,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Buttons
-                    Row(
-                      children: [
-                        // Cancel button
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.2),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                'Cancel',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Save button
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              if (controller.text.isNotEmpty) {
-                                await _saveMarker(controller.text, position);
-                              }
-                              Navigator.pop(context);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF0A84FF),
-                                    Color(0xFF0066CC),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF0A84FF,
-                                    ).withOpacity(0.3),
-                                    blurRadius: 15,
-                                    spreadRadius: 0,
-                                  ),
-                                ],
-                              ),
-                              child: const Text(
-                                'Save',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Name this location',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'e.g., Keys, Phone, Bag...',
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF00C853)),
             ),
           ),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              Navigator.pop(context);
+              _saveMarker(value.trim(), position);
+            }
+          },
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty) {
+                Navigator.pop(context);
+                _saveMarker(nameController.text.trim(), position);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C853),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
 
   Future<void> _saveMarker(String label, vm.Vector3 position) async {
-    // Create AR marker
-    await _createARMarker(label, position);
+    print('🔵 Saving marker: $label at $position');
 
-    // Save to Cactus with embeddings (if service is ready)
+    // Save to Cactus
     if (_spatialService != null) {
       final memory = SpatialMemory(
-        label: label.toLowerCase(),
-        anchorId: 'marker_${DateTime.now().millisecondsSinceEpoch}',
+        label: label,
+        anchorId: 'anchor_${DateTime.now().millisecondsSinceEpoch}',
         position: position,
         timestamp: DateTime.now(),
       );
 
       await _spatialService!.saveMemory(memory);
+      print('💾 Saved to Cactus: $label');
+      print(
+        '   Position: (${position.x.toStringAsFixed(2)}, ${position.y.toStringAsFixed(2)}, ${position.z.toStringAsFixed(2)})',
+      );
+    } else {
+      print('⚠️ Spatial service not ready - memory NOT saved!');
     }
 
-    // Premium styled snackbar
+    // Create 3D AR marker
+    await _createARMarker(label, position);
+
+    // Show confirmation
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
+              const Icon(Icons.check_circle, color: Color(0xFF00C853)),
               const SizedBox(width: 12),
-              Text(
-                'Saved: $label',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.2,
-                ),
-              ),
+              Text('Saved: $label'),
             ],
           ),
           backgroundColor: const Color(0xFF0A84FF).withOpacity(0.9),
@@ -419,15 +281,13 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
         ),
       );
     }
-
-    setState(() {});
   }
 
   Future<void> _createARMarker(String label, vm.Vector3 position) async {
     final anchorId = 'marker_${DateTime.now().millisecondsSinceEpoch}';
 
     try {
-      // Create an anchor at the tap position
+      // Create anchor
       final anchor = ARPlaneAnchor(
         transformation: vm.Matrix4.identity()..setTranslation(position),
       );
@@ -435,190 +295,46 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
       final didAddAnchor = await _arAnchorManager?.addAnchor(anchor);
 
       if (didAddAnchor == true) {
-        _anchors[anchorId] = anchor;
+        // Create 3D sphere node from GLB (binary GLTF)
+        final node = ARNode(
+          type: NodeType.localGLB,
+          uri: 'assets/models/sphere-gltf-example.glb',
+          scale: vm.Vector3(0.0008, 0.0008, 0.0008), // Extremely tiny
+          position: position,
+        );
 
-        // Create text label as AR object with green background
-        // Note: ar_flutter_plugin_plus has limited 3D object support
-        // We'll use the plugin's basic capabilities
-        print('✅ Created AR anchor for: $label at $position');
-        print('   Anchor ID: $anchorId');
+        final didAddNode = await _arObjectManager?.addNode(
+          node,
+          planeAnchor: anchor,
+        );
 
-        // Store for future retrieval
-        setState(() {
-          _visibleMarkers.add({
-            'label': label,
-            'anchorId': anchorId,
-            'position': position,
+        if (didAddNode == true) {
+          // Track marker for 2D text overlay
+          setState(() {
+            _markers[anchorId] = {
+              'label': label,
+              'position': position,
+              'anchor': anchor,
+              'node': node,
+            };
           });
-        });
+
+          print('✅ Created 3D AR marker: $label');
+        }
       }
     } catch (e) {
       print('❌ Error creating AR marker: $e');
     }
   }
 
-  // Create HTML widget for 3D text label
-  String _createTextWidget(String label) {
-    return '''
-      <div style="
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(22, 163, 74, 0.9));
-        color: white;
-        padding: 12px 20px;
-        border-radius: 16px;
-        font-family: -apple-system, sans-serif;
-        font-size: 24px;
-        font-weight: 700;
-        text-align: center;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        border: 3px solid rgba(255, 255, 255, 0.5);
-        min-width: 100px;
-      ">
-        📍 $label
-      </div>
-    ''';
-  }
-
-  // Build a single AR marker widget
-  Widget _buildMarkerWidget(String label) {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.5),
-            blurRadius: 20,
-            spreadRadius: 5,
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Green sphere marker
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [Colors.green.shade300, Colors.green.shade600],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.6),
-                  blurRadius: 15,
-                  spreadRadius: 3,
-                ),
-              ],
-            ),
-            child: const Icon(Icons.location_on, color: Colors.white, size: 32),
-          ),
-          const SizedBox(height: 8),
-          // Label
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.green.withOpacity(0.5),
-                width: 1.5,
-              ),
-            ),
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Glassmorphism widget builder
-  Widget _buildGlassMorphism({
-    required Widget child,
-    double blur = 20,
-    double opacity = 0.15,
-    Color? tint,
-    EdgeInsets? padding,
-    BorderRadius? borderRadius,
-  }) {
-    return ClipRRect(
-      borderRadius: borderRadius ?? BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding ?? const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: (tint ?? Colors.white).withOpacity(opacity),
-            borderRadius: borderRadius ?? BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.2),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 30,
-                spreadRadius: -5,
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleTextQuery() async {
-    if (_queryController.text.isEmpty || _spatialService == null) return;
-
-    final query = _queryController.text.toLowerCase();
-    _queryController.clear();
-
-    setState(() => _isProcessing = true);
-
-    try {
-      final result = await _spatialService!.findMemory(query);
-
-      if (result != null) {
-        setState(() {
-          _aiResponse = 'Found: ${result.label}';
-          _isProcessing = false;
-        });
-      } else {
-        setState(() {
-          _aiResponse = 'No matches found';
-          _isProcessing = false;
-        });
-      }
-    } catch (e) {
-      print('Error searching: $e');
-      setState(() => _isProcessing = false);
-    }
-  }
-
   Future<void> _handleVoiceCommand() async {
-    if (_voiceService == null) {
-      print('Voice service not ready yet');
-      return;
-    }
+    if (_voiceService == null) return;
+    if (_isListening) return;
 
-    if (_isListening) {
-      // Already listening - ignore
-      return;
-    }
-
-    // Start listening
     setState(() => _isListening = true);
 
     try {
       final result = await _voiceService!.listen();
-
       setState(() => _isListening = false);
 
       if (result != null && result.isNotEmpty) {
@@ -629,6 +345,70 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
       print('Error with voice: $e');
       setState(() => _isListening = false);
     }
+  }
+
+  Future<void> _handleTextQuery() async {
+    if (_queryController.text.isEmpty || _spatialService == null) {
+      print('⚠️ Query empty or service not ready');
+      return;
+    }
+
+    final query = _queryController.text.toLowerCase();
+    print('🔍 Searching for: "$query"');
+    _queryController.clear();
+
+    setState(() => _isProcessing = true);
+
+    try {
+      final result = await _spatialService!.findMemory(query);
+      print('📍 Search result: ${result?.label ?? "NULL"}');
+
+      if (result != null) {
+        setState(() {
+          _aiResponse =
+              'Found: ${result.label}\nAt position: ${result.position.x.toStringAsFixed(1)}, ${result.position.y.toStringAsFixed(1)}, ${result.position.z.toStringAsFixed(1)}';
+          _isProcessing = false;
+        });
+      } else {
+        setState(() {
+          _aiResponse = 'No matches found for "$query"';
+          _isProcessing = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error searching: $e');
+      setState(() {
+        _aiResponse = 'Error: $e';
+        _isProcessing = false;
+      });
+    }
+  }
+
+  Widget _buildGlassMorphism({
+    required Widget child,
+    double blur = 20,
+    double opacity = 0.15,
+    EdgeInsets? padding,
+    BorderRadius? borderRadius,
+  }) {
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          padding: padding ?? const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(opacity),
+            borderRadius: borderRadius ?? BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1.5,
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
   }
 
   @override
@@ -666,10 +446,10 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
-      appBar: buildGlassAppBar(),
+      appBar: _buildAppBar(),
       body: Stack(
         children: [
-          // AR View - ARCore for Android
+          // AR View
           ARView(
             onARViewCreated: _onARViewCreated,
             planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
@@ -695,7 +475,53 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
             ),
           ),
 
-          // Instructions Banner - Top Center
+          // 2D Text Labels for markers (projected from 3D positions)
+          ..._markers.entries.map((entry) {
+            final label = entry.value['label'] as String;
+            final position = entry.value['position'] as vm.Vector3;
+
+            // Project 3D position to 2D screen coordinates
+            final screenPos = _projectPositionToScreen(position);
+
+            if (screenPos == null) return const SizedBox.shrink();
+
+            return Positioned(
+              left: screenPos.dx - 80, // Center the label (approximate width/2)
+              top: screenPos.dy,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C853).withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00C853).withOpacity(0.5),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Text(
+                  label.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+
+          // Instructions Banner
           Positioned(
             top: MediaQuery.of(context).padding.top + 70,
             left: 24,
@@ -720,7 +546,6 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      letterSpacing: 0.3,
                     ),
                   ),
                   Padding(
@@ -743,7 +568,6 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
@@ -769,20 +593,10 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                     ],
                   ),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF0A84FF).withOpacity(0.3),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    ),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
                   ),
                 ),
               ),
@@ -805,12 +619,7 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _aiResponse = '';
-                              _contextSummary = '';
-                            });
-                          },
+                          onTap: () => setState(() => _aiResponse = ''),
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
@@ -839,7 +648,6 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                         color: Colors.white,
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
                         height: 1.4,
                       ),
                       textAlign: TextAlign.center,
@@ -876,18 +684,14 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                           hintText: 'Where is...',
                           hintStyle: TextStyle(
                             color: Colors.white.withOpacity(0.5),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w400,
                           ),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
                         ),
                         onSubmitted: (_) => _handleTextQuery(),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Mic Button
                   GestureDetector(
                     onTap: _handleVoiceCommand,
                     child: Container(
@@ -908,17 +712,6 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                                   const Color(0xFF0066CC),
                                 ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                (_isListening
-                                        ? const Color(0xFFFF375F)
-                                        : const Color(0xFF0A84FF))
-                                    .withOpacity(0.4),
-                            blurRadius: 20,
-                            spreadRadius: 0,
-                          ),
-                        ],
                       ),
                       child: Icon(
                         _isListening ? Icons.mic : Icons.mic_none_outlined,
@@ -933,7 +726,7 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
             ),
           ),
 
-          // Coaching Overlay Blocker - Hides ARCore hand animation after timeout
+          // Coaching Overlay Blocker
           if (_showCoachingOverlay)
             Positioned.fill(
               child: Container(
@@ -948,7 +741,7 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
     );
   }
 
-  AppBar buildGlassAppBar() {
+  AppBar _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -967,10 +760,7 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
                 ],
               ),
               border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.1),
-                  width: 1,
-                ),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.1)),
               ),
             ),
           ),
@@ -985,15 +775,13 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
                 colors: [
                   const Color(0xFF0A84FF).withOpacity(0.8),
                   const Color(0xFF0066CC).withOpacity(0.8),
                 ],
               ),
             ),
-            child: const Icon(Icons.view_in_ar, size: 20, color: Colors.white),
+            child: const Icon(Icons.view_in_ar, size: 20),
           ),
           const SizedBox(width: 12),
           const Text(
@@ -1002,35 +790,70 @@ class _ARSpatialScreenAndroidState extends State<ARSpatialScreenAndroid> {
               color: Colors.white,
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
             ),
           ),
         ],
       ),
       actions: [
+        // Debug button to clear old data
         GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.15),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1,
+          onLongPress: () async {
+            // Long press settings = clear database
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF1E1E1E),
+                title: const Text(
+                  'Clear All Memories?',
+                  style: TextStyle(color: Colors.white),
+                ),
+                content: const Text(
+                  'This will delete all saved spatial memories from Cactus.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text(
+                      'Clear All',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            child: const Icon(
-              Icons.settings_outlined,
-              color: Colors.white,
-              size: 20,
+            );
+
+            if (confirm == true && _spatialService != null) {
+              await _spatialService!.clearAll();
+              setState(() => _markers.clear());
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('All memories cleared')),
+                );
+              }
+            }
+          },
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.15),
+                border: Border.all(color: Colors.white.withOpacity(0.3)),
+              ),
+              child: const Icon(Icons.settings_outlined, size: 20),
             ),
           ),
         ),

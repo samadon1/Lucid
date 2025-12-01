@@ -40,9 +40,9 @@ dependencies:
   # Camera
   camera: ^0.11.0
 
-  # AR (Spatial Memory) - Cross-platform
-  arkit_plugin: ^1.0.7  # iOS only (until fully migrated)
-  ar_flutter_plugin_plus: ^1.0.0  # Cross-platform (ARKit + ARCore)
+  # AR (Spatial Memory) - Platform-specific
+  arkit_plugin: ^1.0.7  # iOS ARKit  
+  ar_flutter_plugin_plus: ^1.0.0  # Android ARCore (works without Play Services)
 
   # Text-to-Speech
   flutter_tts: ^4.2.0
@@ -108,6 +108,7 @@ flutter:
     - assets/images/ai_conversation.gif
     - assets/images/integrations_icon.png
     - assets/images/gmail.png
+    - assets/models/  # 3D models for AR markers
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
